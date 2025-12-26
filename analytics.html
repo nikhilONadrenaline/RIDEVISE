@@ -197,7 +197,7 @@
                                                            // SUMMARY DATA
         async function loadSummary(userId) {
       try {
-        const res = await fetch(`/api/v1/analytics/summary?userId=${userId}`);
+        const res = await fetch(`${API_BASE}/api/v1/analytics/summary?userId=${userId}`);
 
         if (!res.ok) {
           const errText = await res.text().catch(() => "Unable to read error body");
@@ -229,7 +229,7 @@
           const days = co2Range.value;
 
           const res = await fetch(
-            `/api/v1/analytics/co2-trend?userId=${userId}&days=${days}`
+            `${API_BASE}/api/v1/analytics/co2-trend?userId=${userId}&days=${days}`
           );
 
           if (!res.ok) return;
@@ -264,7 +264,7 @@
 
       try {
         const res = await fetch(
-          `/api/v1/analytics/walking-trend?userId=${userId}&range=${range}`
+          `${API_BASE}/api/v1/analytics/walking-trend?userId=${userId}&range=${range}`
         );
 
         if (!res.ok) return;
@@ -325,7 +325,7 @@
         async function loadSavingsVsCo2(userId) {
       try {
         const res = await fetch(
-          `/api/v1/analytics/savings-vs-co2?userId=${userId}`
+          `${API_BASE}/api/v1/analytics/savings-vs-co2?userId=${userId}`
         );
 
         if (!res.ok) return;
@@ -387,7 +387,7 @@
       noDataMessage.style.display = "none";
 
       try {
-        const res = await fetch(`/api/v1/analytics/provider-savings-trend?userId=${userId}`);
+        const res = await fetch(`${API_BASE}/api/v1/analytics/provider-savings-trend?userId=${userId}`);
 
         // 🔥 HTTP STATUS CHECK (CodeRabbit requirement)
         if (!res.ok) {
@@ -493,6 +493,7 @@
 
 </body>
 </html>
+
 
 
 
