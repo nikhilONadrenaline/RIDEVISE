@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>Analytics — FareComparator</title>
+    <link rel="stylesheet" href="analytics.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+    <style>
+        .chart-wrapper { height: 330px; position: relative; }
+        .loading-overlay {
+          display: none;
+          position: absolute;
+          inset: 0;
+          background: rgba(255,255,255,0.75);
+          align-items: center;
+          justify-content: center;
+          font-weight: 700;
+          color: #333;
+          z-index: 999;
+        }
+    </style>
+</head>
+
+<body>
+<div class="app-shell">
+    <header class="app-nav">
+        <div class="app-brand"><span>FareComparator</span></div>
+        <nav class="app-nav-links">
+            <a href="compare.html">Compare</a>
+            <a href="history.html">History</a>
+            <a href="analytics.html" class="active">Analytics</a>
+        </nav>
+    </header>
+
+    <main class="app-main">
+
+        <!-- SUMMARY CARD -->
+        <section class="card">
+            <div class="card-header">
+                <div>
+                    <h1 class="card-title">Analytics Summary</h1>
+                    <p class="text-muted">Overview for user.</p>
+                </div>
+                <span class="chip">Analytics API</span>
+            </div>
+
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem">
+                <div class="stat-card card">
+                    <div class="text-muted">Total Requests</div>
+                    <div id="totalRequests" style="font-weight:700;font-size:1.4rem">—</div>
+                </div>
+                <div class="stat-card card">
+                    <div class="text-muted">Average Savings (₹)</div>
+                    <div id="avgSavings" style="font-weight:700;font-size:1.4rem">—</div>
+                </div>
+                <div class="stat-card card">
+                    <div class="text-muted">Most Used Provider</div>
+                    <div id="mostUsed" style="font-weight:700;font-size:1.2rem">—</div>
+                </div>
+                <div class="stat-card card">
+                    <div class="text-muted">CO₂ Reduced (30d)</div>
+                    <div id="summaryCo2" style="font-weight:700;font-size:1.2rem">—</div>
+                </div>
+
+                <div class="stat-card card">
+                    <div class="text-muted">Distance Walked</div>
+                    <div id="summaryWalked" style="font-weight:700;font-size:1.2rem">—</div>
+                </div>
+
+                <div class="stat-card card">
+                    <div class="text-muted">Calories Burned</div>
+                    <div id="summaryCalories" style="font-weight:700;font-size:1.2rem">—</div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- PROVIDER-WISE SAVINGS TREND -->
+        <section class="card">
+            <div class="card-header">
+                <h2 class="card-title">Provider-wise Savings Trend</h2>
+                <div style="display:flex;gap:.5rem;align-items:center">
+                    <input id="analyticsUserId" value="123"
+                           style="padding:.4rem;border-radius:8px;border:1px solid #eef2f6" />
+                    <button id="loadAnalytics" class="btn btn-primary btn-sm">Load</button>
+                </div>
+            </div>
+
+            <div style="padding:1rem" class="card chart-container">
+                <div class="chart-wrapper">
+                    <div class="loading-overlay" id="chartLoading">Loading…</div>
+                    <canvas id="requestsChart"></canvas>
+                </div>
+                <div id="noDataMessage" style="display:none;padding:1rem;color:#666;text-align:center;">
+                    No analytics data available.
+                </div>
+            </div>
+        </section>
+
+        <!--CO2 trend section -->
+        <section class="card">
+            <div class="card-header">
+                <h2 class="card-title">Eco Impact (CO₂ Emission)</h2>
+
+                <div style="display:flex;gap:.5rem;align-items:center">
+                    <select id="co2Range">
+                        <option value="7">Last 7 days</option>
+                        <option value="30">Last 30 days</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="chart-wrapper">
+                <canvas id="co2Chart"></canvas>
+            </div>
+        </section>
+
+        <!-- WALKING & HEALTH TREND -->
+        <section class="card">
+            <div class="card-header">
+                <h2 class="card-title">Walking & Health Contribution</h2>
+
+                <div style="display:flex;gap:.5rem;align-items:center">
+                    <select id="walkRange">
+                        <option value="day">Per Day</option>
+                        <option value="week" selected>Per Week</option>
+                        <option value="month">Per Month</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="chart-wrapper">
+                <canvas id="walkChart"></canvas>
+            </div>
+
+            <div class="text-muted small" style="padding:.5rem 1rem">
+                Approx calories burned = 50 kcal per km
+            </div>
+        </section>
+
+        <!-- SAVINGS vs CO2 TRADEOFF -->
+        <section class="card">
+            <div class="card-header">
+                <h2 class="card-title">Savings vs CO₂ Tradeoff</h2>
+                <span class="chip">Insight</span>
+            </div>
+
+            <div class="chart-wrapper">
+                <canvas id="savingsCo2Chart"></canvas>
+            </div>
+
+            <div class="text-muted small" style="padding:.5rem 1rem">
+                Each dot represents one trip.
+            </div>
+        </section>
+
+
+
+    </main>
+</div>
+
+
+<script>
+    const API_BASE =
+      window.location.hostname === 'localhost'
+        ? ''
+        : 'https://fare-backend.onrender.com';
+        const totalRequests = document.getElementById('totalRequests');
+        const avgSavings = document.getElementById('avgSavings');
+        const mostUsed = document.getElementById('mostUsed');
+
+        const loadAnalytics = document.getElementById('loadAnalytics');
+        const userIdInput = document.getElementById('analyticsUserId');
+
+        const chartCanvas = document.getElementById('requestsChart');
+        const chartLoading = document.getElementById('chartLoading');
+        const noDataMessage = document.getElementById('noDataMessage');
+
+        const co2Range = document.getElementById("co2Range");
+        const co2Canvas = document.getElementById("co2Chart");
+        const walkRange = document.getElementById("walkRange");
+        const walkCanvas = document.getElementById("walkChart");
+        const savingsCo2Canvas = document.getElementById("savingsCo2Chart");
+
+        let savingsCo2Chart = null;
+        let walkChart = null;
+        let co2Chart = null;
+        let providerChart = null;
+
+        const COLORS = [
+          "#1f77b4", "#ff7f0e", "#2ca02c",
+          "#d62728", "#9467bd", "#8c564b",
+          "#e377c2", "#7f7f7f", "#17becf"
+        ];
+
+                                                           // SUMMARY DATA
+        async function loadSummary(userId) {
+      try {
+        const res = await fetch(`/api/v1/analytics/summary?userId=${userId}`);
+
+        if (!res.ok) {
+          const errText = await res.text().catch(() => "Unable to read error body");
+          console.error(`Summary API Error: HTTP ${res.status} - ${errText}`);
+          throw new Error(`Summary request failed: ${res.status}`);
+        }
+
+        const data = await res.json();
+
+        totalRequests.textContent = data.totalRequests ?? '—';
+        avgSavings.textContent = (data.averageSavings ?? 0).toFixed(2);
+        mostUsed.textContent = data.mostUsedProvider ?? '—';
+        document.getElementById("summaryCo2").textContent =
+      `🌱 ${data.co2SavedKg} kg`;
+
+    document.getElementById("summaryWalked").textContent =
+      `🚶 ${data.walkedKm} km`;
+
+    document.getElementById("summaryCalories").textContent =
+      `🔥 ~${data.caloriesBurned} kcal`;
+
+
+      } catch (e) {
+        console.error("Summary fetch error:", e);
+      }
+    }
+                                                            // CO2 GRAPH FOR 7/30 DAYS
+          async function loadCo2Trend(userId) {
+          const days = co2Range.value;
+
+          const res = await fetch(
+            `/api/v1/analytics/co2-trend?userId=${userId}&days=${days}`
+          );
+
+          if (!res.ok) return;
+
+          const data = await res.json();
+          if (!data.labels?.length) return;
+
+          if (co2Chart) co2Chart.destroy();
+
+          co2Chart = new Chart(co2Canvas.getContext("2d"), {
+            type: "line",
+            data: {
+              labels: data.labels,
+              datasets: [{
+                label: "CO₂ Emission (kg)",
+                data: data.data,
+                borderColor: "#2ca02c",
+                tension: 0.3
+              }]
+            }
+          });
+        }
+        co2Range.addEventListener("change", () => {
+            const userId = userIdInput.value.trim() || "123";
+            loadCo2Trend(userId);
+        });
+
+                                                 // WALKING AND BURNING CALORIES
+
+        async function loadWalkingTrend(userId) {
+      const range = walkRange.value;
+
+      try {
+        const res = await fetch(
+          `/api/v1/analytics/walking-trend?userId=${userId}&range=${range}`
+        );
+
+        if (!res.ok) return;
+
+        const data = await res.json();
+        if (!data.labels?.length) return;
+
+        if (walkChart) walkChart.destroy();
+
+        walkChart = new Chart(walkCanvas.getContext("2d"), {
+          type: "bar",
+          data: {
+            labels: data.labels,
+            datasets: [
+              {
+                label: "Walked Distance (km)",
+                data: data.distance,
+                backgroundColor: "#1f77b4"
+              },
+              {
+                label: "Calories Burned (kcal)",
+                data: data.calories,
+                backgroundColor: "#ff7f0e"
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              y: {
+                beginAtZero: true,
+                title: {
+                  display: true,
+                  text: "Distance (km) / Calories"
+                }
+              },
+              x: {
+                title: {
+                  display: true,
+                  text: range.charAt(0).toUpperCase() + range.slice(1)
+                }
+              }
+            }
+          }
+        });
+
+      } catch (e) {
+        console.error("Walking trend error:", e);
+      }
+    }
+        walkRange.addEventListener("change", () => {
+            const userId = userIdInput.value.trim() || "123";
+            loadWalkingTrend(userId);
+        });
+
+                                                        // SAVINGS VS CO2
+        async function loadSavingsVsCo2(userId) {
+      try {
+        const res = await fetch(
+          `/api/v1/analytics/savings-vs-co2?userId=${userId}`
+        );
+
+        if (!res.ok) return;
+
+        const data = await res.json();
+        if (!data.points?.length) return;
+
+        if (savingsCo2Chart) savingsCo2Chart.destroy();
+
+        savingsCo2Chart = new Chart(savingsCo2Canvas.getContext("2d"), {
+          type: "scatter",
+          data: {
+            datasets: [{
+              label: "Trips",
+              data: data.points,
+              backgroundColor: "#9467bd",
+              pointRadius: 5
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              tooltip: {
+                callbacks: {
+                  label: (ctx) =>
+                    `Savings: ₹${ctx.parsed.x}, CO₂: ${ctx.parsed.y} kg`
+                }
+              }
+            },
+            scales: {
+              x: {
+                title: {
+                  display: true,
+                  text: "Savings (₹)"
+                },
+                beginAtZero: true
+              },
+              y: {
+                title: {
+                  display: true,
+                  text: "CO₂ Emission (kg)"
+                },
+                beginAtZero: true
+              }
+            }
+          }
+        });
+
+      } catch (e) {
+        console.error("Savings vs CO2 error:", e);
+      }
+    }
+
+
+                                                        // PROVIDER-WISE SAVINGS TREND
+    async function loadProviderSavings(userId) {
+      chartLoading.style.display = "flex";
+      noDataMessage.style.display = "none";
+
+      try {
+        const res = await fetch(`/api/v1/analytics/provider-savings-trend?userId=${userId}`);
+
+        // 🔥 HTTP STATUS CHECK (CodeRabbit requirement)
+        if (!res.ok) {
+          console.error(`ProviderSavings API Error: HTTP ${res.status} - ${res.statusText}`);
+
+          destroyChart();
+          noDataMessage.style.display = "block";
+
+          return; // ❗ Prevent parsing non-JSON error body
+        }
+
+        // ✔ Only parse JSON when response.ok = true
+        const data = await res.json();
+
+        if (!data.labels?.length || !data.datasets?.length) {
+          destroyChart();
+          noDataMessage.style.display = "block";
+          return;
+        }
+
+        const chartData = data.datasets.map((ds, i) => {
+          const color = COLORS[i % COLORS.length];
+          return {
+            label: ds.label,
+            data: ds.data,
+            tension: 0.3,
+            borderWidth: 2,
+            fill: false,
+            borderColor: color,
+            backgroundColor: color,
+            pointRadius: 4,
+            pointHoverRadius: 6
+          };
+        });
+
+        renderProviderChart(data.labels, chartData);
+
+      } catch (e) {
+        console.error("ProviderSavings fetch error:", e);
+        destroyChart();
+        noDataMessage.style.display = "block";
+      } finally {
+        chartLoading.style.display = "none";
+      }
+    }
+
+
+        function renderProviderChart(labels, datasets) {
+          if (providerChart) providerChart.destroy();
+
+          providerChart = new Chart(chartCanvas.getContext("2d"), {
+            type: "line",
+            data: { labels, datasets },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              interaction: { mode: "nearest", intersect: false },
+              plugins: {
+                legend: {
+                  position: "top",
+                  labels: { usePointStyle: true }
+                },
+                tooltip: {
+                  callbacks: {
+                    label: (ctx) => `${ctx.dataset.label}: ₹${ctx.formattedValue}`
+                  }
+                }
+              },
+              scales: {
+                y: {
+                  beginAtZero: true,
+                  title: { display: true, text: "Savings (₹)" }
+                },
+                x: {
+                  title: { display: true, text: "Request Number" }
+                }
+              }
+            }
+          });
+        }
+
+        function destroyChart() {
+          if (providerChart) {
+            providerChart.destroy();
+            providerChart = null;
+          }
+        }
+
+        loadAnalytics.addEventListener("click", async () => {
+          const userId = userIdInput.value.trim() || "123";
+          chartLoading.style.display = "flex";
+          await loadSummary(userId);
+          await loadProviderSavings(userId);
+          await loadCo2Trend(userId);
+          await loadWalkingTrend(userId);
+          await loadSavingsVsCo2(userId);
+          chartLoading.style.display = "none";
+        });
+
+        window.onload = () => loadAnalytics.click();
+
+</script>
+
+</body>
+</html>

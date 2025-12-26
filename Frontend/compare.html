@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Compare — FareComparator</title>
+  <link rel="stylesheet" href="compare.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-nav">
+      <div class="app-brand"><span>FareComparator</span><span class="badge"></span></div>
+      <nav class="app-nav-links">
+        <a href="compare.html" class="active">Compare</a>
+        <a href="history.html">History</a>
+        <a href="analytics.html">Analytics</a>
+      </nav>
+    </header>
+
+    <main class="app-main">
+      <section class="card">
+        <div class="card-header">
+          <div>
+            <h1 class="card-title">Compare Fares</h1>
+            <p class="text-muted">Enter origin & destination</p>
+          </div>
+          <span class="chip">We aim to Improve 🙂</span>
+        </div>
+
+        <form id="compareForm" class="form-grid form-grid-2">
+          <div class="form-field">
+            <label for="userId">User ID</label>
+            <input id="userId" name="userId" placeholder="Optional" />
+          </div>
+          <div class="form-field">
+            <label for="preferCheapest">Prefer Cheapest?</label>
+            <select id="preferCheapest" name="preferCheapest">
+              <option value="true">Yes</option>
+              <option value="false">No</option>
+            </select>
+          </div>
+
+            <div class="form-field">
+            <label for="origin">Origin</label>
+            <input id="origin" name="origin" placeholder="Noida Sector 62" required />
+          </div>
+          <div class="form-field">
+            <label for="destination">Destination</label>
+            <input id="destination" name="destination" placeholder="Rajiv Chowk" required />
+          </div>
+
+          <div class="form-field">
+            <label for="departureTime">Departure (optional)</label>
+            <input id="departureTime" name="departureTime" type="datetime-local" />
+          </div>
+          <div class="form-field">
+            <label>&nbsp;</label>
+            <div style="display:flex; gap:.5rem;">
+              <button type="submit" class="btn btn-primary">Compare</button>
+              <button id="refreshBtn" type="button" class="btn btn-secondary btn-sm">Refresh</button>
+              <button id="clearBtn" type="button" class="btn btn-secondary btn-sm">Clear</button>
+            </div>
+          </div>
+
+          <div class="form-field" style="grid-column:1/-1">
+            <div id="statusLine" class="text-muted">Idle</div>
+          </div>
+        </form>
+      </section>
+        <!-- ROUTE MAP (FAST + FREE) -->
+        <section class="card" style="margin-top:1rem">
+            <div class="card-header">
+                <h2 class="card-title">Route Preview</h2>
+                <span class="chip">Google Maps</span>
+            </div>
+
+            <div id="mapContainer"
+                 style="
+         width:100%;
+         height:320px;
+         border-radius:12px;
+         background:#f3f4f6;
+         display:flex;
+         align-items:center;
+         justify-content:center;
+         color:#6b7280;
+         font-size:.9rem;
+       ">
+                Map preview will appear here
+            </div>
+        </section>
+
+        <section class="card" id="resultsCard">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">Providers</h2>
+            <p class="text-muted" id="metaLine">No request yet</p>
+          </div>
+          <span class="badge" id="resultsCount">0</span>
+        </div>
+
+        <div id="providersList" class="providers-grid">
+          <div class="text-muted" style="padding:1rem">No results — submit a compare request.</div>
+        </div>
+          <div style="margin-top:1rem; text-align:right">
+              <button id="confirmChoiceBtn"
+                      class="btn btn-primary"
+                      disabled>
+                  Choose Selected Option
+              </button>
+          </div>
+
+          <!-- Info / Disclaimer (Inline) -->
+          <div class="disclaimer-wrapper">
+              <button id="toggleDisclaimer"
+                      class="info-circle"
+                      type="button"
+                      aria-controls="disclaimerBox"
+                      aria-expanded="false"
+                      aria-label="Show information and disclaimers">i</button>
+
+              <div id="disclaimerBox" class="disclaimer-box hidden">
+                  <ul>
+                      <li>All prices and estimates shown are approximate and based on calculated or observed data. 100% accuracy is not guaranteed.</li>
+                      <li>Further improvements can be made by introducing a common login system to authenticate users directly with providers and use official APIs.</li>
+                      <li>Exact distance calculation requires valid API keys configured via environment variables(currently unavailable). Mock distances are used for demo purposes.</li>
+                      <li>Metro options are displayed only when the selected origin and destination match valid metro stations or supported routes.</li>
+                      <li>Prices are calculated purely based on distance and do not guarantee ride availability without direct provider authentication (currently unavailable).</li>
+                  </ul>
+              </div>
+          </div>
+
+      </section>
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Quick Demo</h2>
+                <p class="text-muted">Click to auto-fill sample routes</p>
+            </div>
+
+            <div class="demo-buttons">
+                <button class="btn btn-secondary demo-btn"
+                        data-origin="New Delhi"
+                        data-destination="Rajiv Chowk">
+                    New Delhi → Rajiv Chowk
+                </button>
+
+                <button class="btn btn-secondary demo-btn"
+                        data-origin="New Delhi"
+                        data-destination="Karol Bagh">
+                    New Delhi → Karol Bagh
+                </button>
+
+                <button class="btn btn-secondary demo-btn"
+                        data-origin="Mumbai"
+                        data-destination="Thane">
+                    Mumbai → Thane
+                </button>
+                <button class="btn btn-secondary demo-btn"
+                        data-origin="New Delhi"
+                        data-destination="Noida">
+                    New Delhi → Noida
+                </button>
+            </div>
+        </div>
+    </main>
+  </div>
+
+<script>
+    const API_BASE =
+      window.location.hostname === 'localhost'
+        ? ''
+        : 'https://fare-backend.onrender.com';
+      const compareForm = document.getElementById('compareForm');
+      const providersList = document.getElementById('providersList');
+      const statusLine = document.getElementById('statusLine');
+      const metaLine = document.getElementById('metaLine');
+      const resultsCount = document.getElementById('resultsCount');
+      const refreshBtn = document.getElementById('refreshBtn');
+      const clearBtn = document.getElementById('clearBtn');
+
+      let selectedProviderId = null;
+      let lastRequestPayload = null;
+      let lastResponseMeta = null;
+      let lastSnapshotId = null; // 👈 top me global
+
+    async function doCompare(payload) {
+      setStatus('Loading...');
+      providersList.innerHTML = '<div class="text-muted" style="padding:1rem">Loading providers...</div>';
+
+      try {
+        const res = await fetch(API_BASE + '/api/v1/compare', {
+          method: 'POST',
+          headers: { 'Content-Type':'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+
+        const data = await res.json();
+
+        // ✅ MOST IMPORTANT LINE
+        lastSnapshotId = data.snapshotId;
+
+        lastResponseMeta = data.meta || null;
+        metaLine.textContent = `Distance: ${data.totalDistanceKm ?? '-'} km`;
+
+        setStatus('Loaded at ' + new Date().toLocaleTimeString());
+
+        renderProviders(
+          data.sortedFares || [],
+          data.recommendation?.chosenProviderId || null
+        );
+
+      } catch (err) {
+        console.error(err);
+        setStatus('Failed to load — check console', true);
+        showEmptyState('Service temporarily unavailable.');
+      }
+    }
+
+
+
+      function setStatus(text, error=false) {
+        statusLine.textContent = text;
+        statusLine.style.color = error ? '#dc2626' : '#6b7280';
+      }
+
+      function renderProviders(sortedFares = [], recommendedId = null)
+      {
+        let fastestProviderId = null;
+        let minEta = Infinity;
+
+        sortedFares.forEach(p => {
+          if (typeof p.etaMinutes === 'number' && p.etaMinutes < minEta) {
+            minEta = p.etaMinutes;
+            fastestProviderId = p.providerId;
+          }
+        });
+
+        providersList.innerHTML = '';
+        if (!sortedFares || sortedFares.length === 0) {
+        showEmptyState('No providers available for this route.');
+        return;
+        }
+
+        resultsCount.textContent = sortedFares.length;
+        // Build cards
+        sortedFares.forEach(p => {
+          const el = document.createElement('div');
+            el.className = 'provider-card' + (p.providerId === recommendedId ? ' recommended' : '');
+            el.dataset.providerId = p.providerId;
+
+             el.innerHTML = `
+        <div class="provider-top">
+        <div class="provider-name">
+          ${escapeHtml(p.providerName)}
+
+          ${p.providerId === recommendedId
+            ? '<span class="best-badge">Best Choice</span>'
+            : ''}
+
+          ${p.providerId === fastestProviderId
+            ? '<span class="fastest-icon" title="Fastest option">⏱</span>'
+            : ''}
+        </div>
+
+        ${p.isSurge ? '<div class="surge">Surge</div>' : ''}
+        </div>
+
+
+            <div class="provider-body">
+          <div class="fare">₹ ${Number(p.price).toFixed(2)}</div>
+          <div class="eta">ETA: ${p.etaMinutes ?? '-'}m</div>
+
+          <div class="small text-muted">
+            Vehicle: ${escapeHtml(formatVehicleType(p.vehicleType || p.vehicle_type))}
+          </div>
+
+          <div class="small co2-line">
+            🌱 ${formatCO2(p)}
+          </div>
+        </div>
+
+
+            <div class="provider-foot">
+              <div class="small text-muted">Provider: ${escapeHtml(p.providerId)}</div>
+            </div>
+          `;
+          providersList.appendChild(el);
+        });
+      }
+       providersList.addEventListener('click', (e) => {
+      const card = e.target.closest('.provider-card');
+      if (!card) return;
+
+      selectedProviderId = card.dataset.providerId;
+
+      // UI highlight
+      document.querySelectorAll('.provider-card').forEach(c =>
+        c.classList.remove('selected')
+      );
+      card.classList.add('selected');
+
+      // Enable confirm button
+      const btn = document.getElementById('confirmChoiceBtn');
+      if (btn) btn.disabled = false;
+
+      setStatus(`Selected option: ${selectedProviderId}`);
+    });
+
+      function escapeHtml(s) { return String(s||'').replace(/[&<>"']/g, (m)=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+      function formatVehicleType(type) {
+      if (!type) return '-';
+      return type
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, c => c.toUpperCase());
+    }
+
+        function formatCO2(p) {
+      const co2 = p?.metadata?.co2EmissionKg;
+      if (typeof co2 !== 'number') return 'CO₂: -';
+      return `CO₂: ${co2.toFixed(2)} kg`;
+    }
+
+
+      compareForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const form = new FormData(compareForm);
+        const payload = {
+          userId: form.get('userId') || '123',
+          origin: form.get('origin'),
+          destination: form.get('destination'),
+          departureTime: form.get('departureTime') || null,
+          preferCheapest: (form.get('preferCheapest') === 'true'),
+          preferFastest: false
+        };
+        lastRequestPayload = payload;
+        doCompare(payload);
+        updateRouteMap(payload.origin, payload.destination);
+      });
+
+      refreshBtn.addEventListener('click', () => {
+      if (!lastRequestPayload) {
+        setStatus('No previous request to refresh', true);
+        return;
+      }
+
+      // 🔴 RESET SELECTION
+      selectedProviderId = null;
+      lastSnapshotId = null;
+      const btn = document.getElementById('confirmChoiceBtn');
+      if (btn) btn.disabled = true;
+
+      doCompare(lastRequestPayload);
+    });
+
+      clearBtn.addEventListener('click', () => {
+      compareForm.reset();
+      providersList.innerHTML = '<div class="text-muted" style="padding:1rem">No results — submit a compare request.</div>';
+      metaLine.textContent = 'No request yet';
+      resultsCount.textContent = '0';
+      setStatus('Idle');
+      lastRequestPayload = null;
+      lastResponseMeta = null;
+      lastSnapshotId = null;
+
+      // 🔴 RESET SELECTION
+      selectedProviderId = null;
+      const btn = document.getElementById('confirmChoiceBtn');
+      if (btn) btn.disabled = true;
+    });
+
+        const toggleDisclaimer = document.getElementById('toggleDisclaimer');
+    const disclaimerBox = document.getElementById('disclaimerBox');
+
+    toggleDisclaimer.addEventListener('click', () => {
+      const isHidden = disclaimerBox.classList.toggle('hidden');
+
+      // Update accessibility state
+      toggleDisclaimer.setAttribute(
+        'aria-expanded',
+        String(!isHidden)
+      );
+    });
+    function showEmptyState(message) {
+      providersList.innerHTML = `
+        <div class="text-muted" style="padding:1rem">
+          ${message}
+        </div>
+      `;
+      resultsCount.textContent = '0';
+    }
+        document.querySelectorAll('.demo-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.getElementById('origin').value = btn.dataset.origin;
+        document.getElementById('destination').value = btn.dataset.destination;
+        setStatus('Demo route loaded');
+      });
+    });
+    const confirmChoiceBtn = document.getElementById('confirmChoiceBtn');
+
+    confirmChoiceBtn.addEventListener('click', async () => {
+      if (!selectedProviderId) {
+        setStatus('Please select an option first', true);
+        return;
+      }
+
+      if (!lastSnapshotId) {
+        setStatus('Snapshot missing. Please compare again.', true);
+        return;
+      }
+
+      const payload = {
+        userId: lastRequestPayload.userId,
+        origin: lastRequestPayload.origin,
+        destination: lastRequestPayload.destination,
+        departureTime: lastRequestPayload.departureTime,
+        snapshotId: lastSnapshotId,            // 👈 KEY
+        chosenProviderId: selectedProviderId
+      };
+
+      console.log('📦 SAVE PAYLOAD', payload);
+
+      try {
+        setStatus('Saving your choice…');
+
+        const res = await fetch(API_BASE + '/api/v1/compare/choose', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) throw new Error('Save failed');
+
+        setStatus('Choice saved successfully ✅');
+
+        // 🔒 lock UI after save
+        confirmChoiceBtn.disabled = true;
+
+      } catch (e) {
+        console.error(e);
+        setStatus('Failed to save choice', true);
+      }
+    });
+
+
+    const mapContainer = document.getElementById("mapContainer");
+
+    function updateRouteMap(origin, destination) {
+      // Fast exit → no errors, no lag
+      if (!origin || !destination) {
+        mapContainer.innerHTML = "Map preview not available";
+        return;
+      }
+
+      // Create iframe dynamically (lazy)
+      const iframe = document.createElement("iframe");
+      iframe.width = "100%";
+      iframe.height = "100%";
+      iframe.style.border = "0";
+      iframe.loading = "lazy";
+
+      iframe.src =
+        "https://www.google.com/maps?q=" +
+        encodeURIComponent(origin + " to " + destination) +
+        "&output=embed";
+
+      // Replace placeholder with map
+      mapContainer.innerHTML = "";
+      mapContainer.appendChild(iframe);
+    }
+
+
+</script>
+</body>
+</html>
